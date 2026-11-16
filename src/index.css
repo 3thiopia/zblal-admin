@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Plus Jakarta Sans", "Noto Sans Ethiopic", system-ui, sans-serif;
+  --font-sans: "DM Sans", "Noto Sans Ethiopic", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-forest: #123C2A;
+  --color-forest-hover: #0E2F21;
+  --color-warm-bg: #F7F6F0;
+  --color-card-bg: #FFFFFF;
+  --color-soft-green: #DCE8DF;
+  --color-ink: #202A24;
+  --color-ink-muted: #758078;
+  --color-line: #E6EAE5;
+}
+
+@layer base {
+  html,
+  body {
+    font-family: var(--font-sans);
+    color: #202A24;
+    background-color: #F7F6F0;
+    overflow-x: clip;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+  }
+
+  @media (max-width: 639px) {
+    input:not([type='checkbox']):not([type='radio']),
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.leaflet-popup-content-wrapper {
+  max-width: calc(100vw - 32px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

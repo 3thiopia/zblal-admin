@@ -1,0 +1,8 @@
+{
+  "name": "Zblal Admin",
+  "description": "Operations management web application for Zblal (ዝብላል), an Ethiopian septic tank emptying service.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
