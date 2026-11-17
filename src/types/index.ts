@@ -80,11 +80,11 @@ export interface ServicePriorityRecord {
 }
 
 export type CallOutcome =
-  | 'Answered - Accepted'
-  | 'Answered - Declined'
-  | 'No Answer'
-  | 'Line Busy'
-  | 'Requested Callback';
+  | 'no_answer'
+  | 'answered'
+  | 'accepted'
+  | 'declined'
+  | 'call_back_requested';
 
 export interface RequestStatusHistoryItem {
   id: string;
@@ -99,26 +99,35 @@ export interface ServiceAssignmentRecord {
   serviceRequestId: string;
   operatorId: string;
   vehicleId?: string;
+  assignedBy?: string;
   assignmentStatus: string;
-  selectedAt: string;
-  contactedAt?: string;
   callOutcome?: CallOutcome;
   callNotes?: string;
+  assignmentNotes?: string;
+  assignedAt: string;
+  contactedAt?: string;
   confirmedAt?: string;
-  confirmedBy?: string;
+  startedAt?: string;
+  completedAt?: string;
   cancelledAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AssignmentWorkflowInfo {
   assignmentId?: string;
   selectedOperatorId?: string;
   vehicleId?: string;
-  selectedAt?: string;
+  assignedBy?: string;
+  assignmentStatus?: string;
+  assignedAt?: string;
   contactedAt?: string;
   callOutcome?: CallOutcome;
   callNotes?: string;
+  assignmentNotes?: string;
   confirmedAt?: string;
-  confirmedBy?: string;
+  startedAt?: string;
+  completedAt?: string;
 }
 
 export interface ServiceRequest {

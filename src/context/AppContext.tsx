@@ -20,11 +20,11 @@ import {
   confirmAssignmentRecord,
   createLocationRecord,
   createOperatorWithVehicle,
+  createOrUpdatePendingAssignment,
   createSubcityRecord,
   loadAllAdminData,
   logAssignmentCallOutcome,
   removeOperatorRecord,
-  selectOrUpdateAssignment,
   toggleLocationStatusRecord,
   toggleSubcityStatusRecord,
   updateOperatorAndVehicle,
@@ -33,6 +33,7 @@ import {
 import { useAuth } from './AuthContext';
 import { ADMIN_AVATAR_IMAGE } from '../lib/assets';
 import { supabase } from '../lib/supabase';
+import { formatCallOutcomeLabel } from '../utils/callOutcomes';
 
 export interface ToastMessage {
   id: string;
@@ -84,7 +85,7 @@ interface AppContextValue {
   updateOperator: (id: string, updates: Partial<Operator>) => Promise<void>;
   deleteOperator: (id: string) => Promise<void>;
   changeOperatorAvailability: (id: string, availability: OperatorStatus, note?: string) => Promise<void>;
-  selectOperatorForRequest: (requestId: string, operatorId: string) => Promise<void>;
+  createPendingAssignmentForRequest: (requestId: string, operatorId: string) => Promise<boolean>;
   recordOperatorCallOutcome: (requestId: string, outcome: CallOutcome, callNotes?: string) => Promise<void>;
   confirmRequestAssignment: (requestId: string) => Promise<void>;
   cancelRequestAssignment: (requestId: string) => Promise<void>;
@@ -354,24 +355,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const selectOperatorForRequest: AppContextValue['selectOperatorForRequest'] = async (
+  const createPendingAssignmentForRequest: AppContextValue['createPendingAssignmentForRequest'] = async (
     requestId,
     operatorId
   ) => {
-    if (!staffProfile) return;
+    if (!staffProfile) {
+      addToast('Authentication required', 'Please sign in as staff to create an assignment.', 'warning');
+      return false;
+    }
     const op = operators.find((o) => o.id === operatorId);
     try {
-      await selectOrUpdateAssignment({
+      await createOrUpdatePendingAssignment({
         serviceRequestId: requestId,
         operatorId,
         vehicleId: op?.vehicleId,
         staffUserId: staffProfile.userId,
       });
       await refreshData();
-      addToast('Operator selected', `Call ${op?.fullName ?? 'operator'} and record call outcome.`, 'info');
+      addToast(
+        'Assignment created',
+        `${op?.fullName ?? 'Operator'} assigned as pending contact. Record call outcome and confirm when ready.`,
+        'success'
+      );
+      return true;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to select operator.';
-      addToast('Selection failed', msg, 'warning');
+      const msg = err instanceof Error ? err.message : 'Failed to create service assignment.';
+      addToast('Assignment creation failed', msg, 'warning');
+      return false;
     }
   };
 
@@ -394,7 +404,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         callNotes,
       });
       await refreshData();
-      addToast('Call outcome recorded', `Saved as "${outcome}" in service_assignments.`);
+      addToast(
+        'Call outcome recorded',
+        `Saved as "${formatCallOutcomeLabel(outcome)}" in service_assignments.`
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to log call outcome.';
       addToast('Save failed', msg, 'warning');
@@ -412,7 +425,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         assignmentId,
         serviceRequestId: requestId,
         operatorId,
-        staffName: staffProfile?.fullName ?? settings.adminName,
+        staffUserId: staffProfile?.userId,
       });
       await refreshData();
       addToast('Assignment confirmed', `${req?.referenceNumber} assigned.`);
@@ -579,7 +592,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateOperator,
         deleteOperator,
         changeOperatorAvailability,
-        selectOperatorForRequest,
+        createPendingAssignmentForRequest,
         recordOperatorCallOutcome,
         confirmRequestAssignment,
         cancelRequestAssignment,

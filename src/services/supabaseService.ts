@@ -16,6 +16,11 @@ import {
   Subcity,
 } from '../types';
 import { isActiveAssignmentStatus } from '../utils/operatorSelection';
+import {
+  formatCallOutcomeLabel,
+  normalizeCallOutcome,
+  toDbCallOutcome,
+} from '../utils/callOutcomes';
 
 const ALLOWED_STAFF_ROLES: StaffRoleSlug[] = ['super_admin', 'admin', 'staff'];
 
@@ -80,6 +85,39 @@ function toDbRequestStatus(status: RequestStatus, format: DbStatusFormat): strin
     return status.toLowerCase();
   }
   return status;
+}
+
+type DbOperatorStatusFormat = 'title' | 'lower';
+let detectedOperatorStatusFormat: DbOperatorStatusFormat = 'lower';
+
+function detectOperatorStatusFormat(rows: Array<Record<string, unknown>>): DbOperatorStatusFormat {
+  for (const r of rows) {
+    const raw = typeof r.availability_status === 'string' ? r.availability_status.trim() : '';
+    if (!raw) continue;
+    if (
+      raw === 'available' ||
+      raw === 'assigned' ||
+      raw === 'busy' ||
+      raw === 'unavailable' ||
+      raw === 'suspended'
+    ) {
+      return 'lower';
+    }
+    if (
+      raw === 'Available' ||
+      raw === 'Assigned' ||
+      raw === 'Busy' ||
+      raw === 'Unavailable' ||
+      raw === 'Suspended'
+    ) {
+      return 'title';
+    }
+  }
+  return detectedOperatorStatusFormat;
+}
+
+function toDbOperatorStatus(status: OperatorStatus, format: DbOperatorStatusFormat): string {
+  return format === 'lower' ? status.toLowerCase() : status;
 }
 
 function isCheckConstraintError(err: { code?: string; message?: string } | null): boolean {
@@ -324,6 +362,7 @@ function buildAdminDataset(params: {
   } = params;
 
   detectedRequestStatusFormat = detectDbStatusFormat(requestRows);
+  detectedOperatorStatusFormat = detectOperatorStatusFormat(operatorRows);
 
   const subcities: Subcity[] = subcityRows.map((r) => ({
     id: String(r.id),
@@ -425,17 +464,19 @@ function buildAdminDataset(params: {
     serviceRequestId: String(r.service_request_id ?? r.request_id ?? ''),
     operatorId: String(r.operator_id ?? ''),
     vehicleId: r.vehicle_id ? String(r.vehicle_id) : undefined,
+    assignedBy: r.assigned_by ? String(r.assigned_by) : undefined,
     assignmentStatus: String(r.assignment_status ?? 'pending_contact'),
-    selectedAt: String(r.selected_at ?? r.created_at ?? new Date().toISOString()),
-    contactedAt: r.contacted_at ? String(r.contacted_at) : undefined,
-    callOutcome: r.call_outcome ? (String(r.call_outcome) as CallOutcome) : undefined,
+    callOutcome: normalizeCallOutcome(r.call_outcome),
     callNotes: r.call_notes ? String(r.call_notes) : undefined,
+    assignmentNotes: r.assignment_notes ? String(r.assignment_notes) : undefined,
+    assignedAt: String(r.assigned_at ?? r.created_at ?? new Date().toISOString()),
+    contactedAt: r.contacted_at ? String(r.contacted_at) : undefined,
     confirmedAt: r.confirmed_at ? String(r.confirmed_at) : undefined,
-    confirmedBy:
-      r.confirmed_by || r.assigned_by
-        ? String(r.confirmed_by ?? r.assigned_by)
-        : undefined,
+    startedAt: r.started_at ? String(r.started_at) : undefined,
+    completedAt: r.completed_at ? String(r.completed_at) : undefined,
     cancelledAt: r.cancelled_at ? String(r.cancelled_at) : undefined,
+    createdAt: r.created_at ? String(r.created_at) : undefined,
+    updatedAt: r.updated_at ? String(r.updated_at) : undefined,
   }));
 
   // Compute real request & operator linkage
@@ -577,7 +618,7 @@ function buildAdminDataset(params: {
         const aActive = isActiveAssignmentStatus(a.assignmentStatus) ? 1 : 0;
         const bActive = isActiveAssignmentStatus(b.assignmentStatus) ? 1 : 0;
         if (aActive !== bActive) return bActive - aActive;
-        return new Date(b.selectedAt).getTime() - new Date(a.selectedAt).getTime();
+        return new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime();
       })[0];
 
     const rawStatus = normalizeRequestStatus(r.status);
@@ -613,12 +654,12 @@ function buildAdminDataset(params: {
       },
     ];
 
-    if (activeAssignment?.selectedAt) {
+    if (activeAssignment?.assignedAt) {
       statusHistory.push({
         id: `sh-sel-${activeAssignment.id}`,
         status: 'Operator Selected',
-        timestamp: activeAssignment.selectedAt,
-        actor: activeAssignment.confirmedBy ?? 'Dispatch Staff',
+        timestamp: activeAssignment.assignedAt,
+        actor: 'Dispatch Staff',
       });
     }
     if (activeAssignment?.contactedAt) {
@@ -626,9 +667,9 @@ function buildAdminDataset(params: {
         id: `sh-cnt-${activeAssignment.id}`,
         status: 'Operator Contacted',
         timestamp: activeAssignment.contactedAt,
-        actor: activeAssignment.confirmedBy ?? 'Dispatch Staff',
+        actor: 'Dispatch Staff',
         note: activeAssignment.callOutcome
-          ? `${activeAssignment.callOutcome}${
+          ? `${formatCallOutcomeLabel(activeAssignment.callOutcome)}${
               activeAssignment.callNotes ? ` — ${activeAssignment.callNotes}` : ''
             }`
           : undefined,
@@ -639,7 +680,7 @@ function buildAdminDataset(params: {
         id: `sh-cnf-${activeAssignment?.id ?? id}`,
         status: 'Assigned',
         timestamp: activeAssignment?.confirmedAt ?? submittedAt,
-        actor: activeAssignment?.confirmedBy ?? 'Dispatch Staff',
+        actor: 'Dispatch Staff',
       });
     }
     if (
@@ -650,7 +691,13 @@ function buildAdminDataset(params: {
       statusHistory.push({
         id: `sh-cur-${id}`,
         status: derivedStatus,
-        timestamp: String(r.updated_at ?? submittedAt),
+        timestamp: String(
+          (derivedStatus === 'In Progress' ? activeAssignment?.startedAt : undefined) ??
+            (derivedStatus === 'Completed' ? activeAssignment?.completedAt : undefined) ??
+            (derivedStatus === 'Cancelled' ? activeAssignment?.cancelledAt : undefined) ??
+            r.updated_at ??
+            submittedAt
+        ),
         actor: 'Operations Staff',
       });
     }
@@ -693,12 +740,16 @@ function buildAdminDataset(params: {
             assignmentId: activeAssignment.id,
             selectedOperatorId: activeAssignment.operatorId,
             vehicleId: activeAssignment.vehicleId,
-            selectedAt: activeAssignment.selectedAt,
+            assignedBy: activeAssignment.assignedBy,
+            assignmentStatus: activeAssignment.assignmentStatus,
+            assignedAt: activeAssignment.assignedAt,
             contactedAt: activeAssignment.contactedAt,
             callOutcome: activeAssignment.callOutcome,
             callNotes: activeAssignment.callNotes,
+            assignmentNotes: activeAssignment.assignmentNotes,
             confirmedAt: activeAssignment.confirmedAt,
-            confirmedBy: activeAssignment.confirmedBy,
+            startedAt: activeAssignment.startedAt,
+            completedAt: activeAssignment.completedAt,
           }
         : undefined,
       statusHistory,
@@ -862,7 +913,11 @@ export async function createOperatorWithVehicle(input: {
       secondary_phone: input.secondaryPhone || null,
       subcity_id: input.subcityId || null,
       location_id: input.neighbourhoodId || null,
-      availability_status: input.availability,
+      availability_status: toDbOperatorStatus(
+        input.availability,
+        detectedOperatorStatusFormat
+      ),
+      is_active: true,
       internal_notes: input.internalNotes || null,
     })
     .select('*')
@@ -908,7 +963,10 @@ export async function updateOperatorAndVehicle(
     operatorPayload.location_id = updates.neighbourhoodId || null;
   }
   if (updates.availability !== undefined) {
-    operatorPayload.availability_status = updates.availability;
+    operatorPayload.availability_status = toDbOperatorStatus(
+      updates.availability,
+      detectedOperatorStatusFormat
+    );
   }
   if (updates.internalNotes !== undefined) {
     operatorPayload.internal_notes = updates.internalNotes || null;
@@ -919,7 +977,27 @@ export async function updateOperatorAndVehicle(
       .from('vehicle_operators')
       .update(operatorPayload)
       .eq('id', operatorId);
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (isCheckConstraintError(error) && updates.availability !== undefined) {
+        const altFormat: DbOperatorStatusFormat =
+          detectedOperatorStatusFormat === 'lower' ? 'title' : 'lower';
+        const retryPayload = {
+          ...operatorPayload,
+          availability_status: toDbOperatorStatus(updates.availability, altFormat),
+        };
+        const retry = await supabase
+          .from('vehicle_operators')
+          .update(retryPayload)
+          .eq('id', operatorId);
+        if (!retry.error) {
+          detectedOperatorStatusFormat = altFormat;
+        } else {
+          throw new Error(retry.error.message);
+        }
+      } else {
+        throw new Error(error.message);
+      }
+    }
   }
 
   const vehiclePayload: Record<string, unknown> = {};
@@ -967,7 +1045,37 @@ export async function removeOperatorRecord(operatorId: string): Promise<void> {
   if (opErr) throw new Error(opErr.message);
 }
 
-export async function selectOrUpdateAssignment(params: {
+async function persistOperatorAvailabilityStatus(
+  operatorId: string,
+  status: OperatorStatus
+): Promise<void> {
+  const supabase = getSupabaseClient();
+  const primaryValue = toDbOperatorStatus(status, detectedOperatorStatusFormat);
+  const firstAttempt = await supabase
+    .from('vehicle_operators')
+    .update({ availability_status: primaryValue })
+    .eq('id', operatorId);
+
+  if (firstAttempt.error) {
+    if (isCheckConstraintError(firstAttempt.error)) {
+      const altFormat: DbOperatorStatusFormat =
+        detectedOperatorStatusFormat === 'lower' ? 'title' : 'lower';
+      const altValue = toDbOperatorStatus(status, altFormat);
+      const retryAttempt = await supabase
+        .from('vehicle_operators')
+        .update({ availability_status: altValue })
+        .eq('id', operatorId);
+      if (!retryAttempt.error) {
+        detectedOperatorStatusFormat = altFormat;
+        return;
+      }
+      throw new Error(retryAttempt.error.message);
+    }
+    throw new Error(firstAttempt.error.message);
+  }
+}
+
+export async function createOrUpdatePendingAssignment(params: {
   serviceRequestId: string;
   operatorId: string;
   vehicleId?: string;
@@ -1002,9 +1110,12 @@ export async function selectOrUpdateAssignment(params: {
       .update({
         operator_id: params.operatorId,
         vehicle_id: params.vehicleId || null,
-        assignment_status: 'pending_contact',
-        selected_at: now,
         assigned_by: params.staffUserId,
+        assignment_status: 'pending_contact',
+        call_outcome: null,
+        contacted_at: null,
+        call_notes: null,
+        assigned_at: now,
       })
       .eq('id', String(existing.id));
     if (updErr) throw new Error(updErr.message);
@@ -1013,9 +1124,10 @@ export async function selectOrUpdateAssignment(params: {
       service_request_id: params.serviceRequestId,
       operator_id: params.operatorId,
       vehicle_id: params.vehicleId || null,
-      assignment_status: 'pending_contact',
-      selected_at: now,
       assigned_by: params.staffUserId,
+      assignment_status: 'pending_contact',
+      call_outcome: null,
+      assigned_at: now,
     });
     if (insErr) throw new Error(insErr.message);
   }
@@ -1037,14 +1149,18 @@ export async function logAssignmentCallOutcome(params: {
 }): Promise<void> {
   const supabase = getSupabaseClient();
   const now = new Date().toISOString();
+  const dbOutcome = toDbCallOutcome(params.outcome);
+  if (!dbOutcome) {
+    throw new Error('Select a valid call outcome before saving.');
+  }
 
   const { error: assignErr } = await supabase
     .from('service_assignments')
     .update({
       assignment_status: 'contacted',
       contacted_at: now,
-      call_outcome: params.outcome,
-      call_notes: params.callNotes || null,
+      call_outcome: dbOutcome,
+      call_notes: params.callNotes?.trim() ? params.callNotes.trim() : null,
     })
     .eq('id', params.assignmentId);
 
@@ -1064,29 +1180,28 @@ export async function confirmAssignmentRecord(params: {
   assignmentId: string;
   serviceRequestId: string;
   operatorId: string;
-  staffName: string;
+  staffUserId?: string;
 }): Promise<void> {
   const supabase = getSupabaseClient();
   const now = new Date().toISOString();
 
+  const updatePayload: Record<string, unknown> = {
+    assignment_status: 'confirmed',
+    confirmed_at: now,
+  };
+  if (params.staffUserId) {
+    updatePayload.assigned_by = params.staffUserId;
+  }
+
   const { error: assignErr } = await supabase
     .from('service_assignments')
-    .update({
-      assignment_status: 'confirmed',
-      confirmed_at: now,
-      confirmed_by: params.staffName,
-    })
+    .update(updatePayload)
     .eq('id', params.assignmentId);
 
   if (assignErr) throw new Error(assignErr.message);
 
   await persistServiceRequestStatus(params.serviceRequestId, 'Assigned');
-
-  const { error: opErr } = await supabase
-    .from('vehicle_operators')
-    .update({ availability_status: 'Assigned' })
-    .eq('id', params.operatorId);
-  if (opErr) throw new Error(opErr.message);
+  await persistOperatorAvailabilityStatus(params.operatorId, 'Assigned');
 }
 
 export async function cancelAssignmentRecord(params: {
@@ -1111,11 +1226,7 @@ export async function cancelAssignmentRecord(params: {
   await persistServiceRequestStatus(params.serviceRequestId, 'Pending');
 
   if (params.operatorId) {
-    const { error: opErr } = await supabase
-      .from('vehicle_operators')
-      .update({ availability_status: 'Available' })
-      .eq('id', params.operatorId);
-    if (opErr) throw new Error(opErr.message);
+    await persistOperatorAvailabilityStatus(params.operatorId, 'Available');
   }
 }
 
@@ -1222,13 +1333,13 @@ export async function updateServiceRequestStatusRecord(params: {
     const now = new Date().toISOString();
     const assignmentUpdate =
       params.status === 'Completed'
-        ? { assignment_status: 'completed' }
+        ? { assignment_status: 'completed', completed_at: now }
         : params.status === 'Cancelled'
         ? { assignment_status: 'cancelled', cancelled_at: now }
         : params.status === 'In Progress'
-        ? { assignment_status: 'in_progress' }
+        ? { assignment_status: 'in_progress', started_at: now }
         : params.status === 'Assigned'
-        ? { assignment_status: 'confirmed' }
+        ? { assignment_status: 'confirmed', confirmed_at: now }
         : null;
 
     if (assignmentUpdate) {
@@ -1254,11 +1365,7 @@ export async function updateServiceRequestStatusRecord(params: {
         ? 'Available'
         : null;
     if (nextOpStatus) {
-      const { error: opErr } = await supabase
-        .from('vehicle_operators')
-        .update({ availability_status: nextOpStatus })
-        .eq('id', operatorToUpdate);
-      if (opErr) throw new Error(opErr.message);
+      await persistOperatorAvailabilityStatus(operatorToUpdate, nextOpStatus);
     }
   }
 }

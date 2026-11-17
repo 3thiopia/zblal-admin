@@ -29,6 +29,10 @@ import {
   getEligiblePrioritizedOperators,
   OperatorLocationPriorityTier,
 } from '../utils/operatorSelection';
+import {
+  CALL_OUTCOME_OPTIONS,
+  formatCallOutcomeLabel,
+} from '../utils/callOutcomes';
 import { CallOutcome } from '../types';
 
 const PRIORITY_BADGE_STYLES: Record<OperatorLocationPriorityTier, string> = {
@@ -36,14 +40,6 @@ const PRIORITY_BADGE_STYLES: Record<OperatorLocationPriorityTier, string> = {
   same_subcity: 'bg-[#DCE8DF] text-[#123C2A] border-[#C3D9C9]',
   other_area: 'bg-[#F7F6F0] text-[#5C665F] border-[#E6EAE5]',
 };
-
-const CALL_OUTCOMES: CallOutcome[] = [
-  'Answered - Accepted',
-  'Answered - Declined',
-  'No Answer',
-  'Line Busy',
-  'Requested Callback',
-];
 
 export function ServiceRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -53,7 +49,7 @@ export function ServiceRequestDetailPage() {
     assignments,
     subcities,
     updatingRequestIds,
-    selectOperatorForRequest,
+    createPendingAssignmentForRequest,
     recordOperatorCallOutcome,
     confirmRequestAssignment,
     cancelRequestAssignment,
@@ -64,7 +60,9 @@ export function ServiceRequestDetailPage() {
 
   const [subcityFilter, setSubcityFilter] = useState<string>('all');
   const [operatorSearch, setOperatorSearch] = useState('');
-  const [callOutcome, setCallOutcome] = useState<CallOutcome>('Answered - Accepted');
+  const [draftOperatorId, setDraftOperatorId] = useState<string | null>(null);
+  const [createAssignConfirmOpen, setCreateAssignConfirmOpen] = useState(false);
+  const [callOutcome, setCallOutcome] = useState<CallOutcome>('accepted');
   const [callNotes, setCallNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmAssignOpen, setConfirmAssignOpen] = useState(false);
@@ -74,6 +72,10 @@ export function ServiceRequestDetailPage() {
   useEffect(() => {
     setSubcityFilter('all');
     setOperatorSearch('');
+    setDraftOperatorId(null);
+    setCreateAssignConfirmOpen(false);
+    setCallOutcome('accepted');
+    setCallNotes('');
   }, [id]);
 
   const {
@@ -115,9 +117,16 @@ export function ServiceRequestDetailPage() {
   }
 
   const workflow = request.assignmentWorkflow;
-  const selectedOperator = operators.find(
+  const persistedOperator = operators.find(
     (o) => o.id === (request.assignedOperatorId || workflow?.selectedOperatorId)
   );
+  const draftOperator = draftOperatorId
+    ? operators.find((o) => o.id === draftOperatorId)
+    : undefined;
+  const isDraftPendingSave = Boolean(
+    draftOperator && draftOperator.id !== workflow?.selectedOperatorId
+  );
+  const activePanelOperator = isDraftPendingSave ? draftOperator : persistedOperator;
   const assignedOperator = operators.find((o) => o.id === request.assignedOperatorId);
 
   const step1Done = Boolean(workflow?.selectedOperatorId || request.assignedOperatorId);
@@ -352,14 +361,18 @@ export function ServiceRequestDetailPage() {
                   step: '1. Operator Selected',
                   done: step1Done,
                   active: !step1Done && canAssign,
-                  detail: selectedOperator ? selectedOperator.fullName : 'Select from list below',
+                  detail: isDraftPendingSave && draftOperator
+                    ? `Preview: ${draftOperator.fullName} (unsaved)`
+                    : persistedOperator
+                    ? persistedOperator.fullName
+                    : 'Select from list below',
                 },
                 {
                   step: '2. Operator Contacted',
                   done: step2Done,
                   active: step1Done && !step2Done && canAssign,
                   detail: workflow?.callOutcome
-                    ? workflow.callOutcome
+                    ? formatCallOutcomeLabel(workflow.callOutcome)
                     : 'Call & log outcome manually',
                 },
                 {
@@ -391,8 +404,8 @@ export function ServiceRequestDetailPage() {
             </div>
           </section>
 
-          {/* Selected / Assigned Operator Call & Confirmation Panel */}
-          {selectedOperator && (
+          {/* Selected / Draft / Assigned Operator Call & Confirmation Panel */}
+          {activePanelOperator && (
             <section className="bg-white border border-[#E6EAE5] rounded-xl p-4 sm:p-5 space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E6EAE5]">
                 <div className="flex items-start gap-3 min-w-0">
@@ -402,37 +415,76 @@ export function ServiceRequestDetailPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="text-sm font-semibold text-[#202A24]">
-                        {selectedOperator.fullName}
+                        {activePanelOperator.fullName}
                       </h4>
-                      <StatusBadge status={selectedOperator.availability} />
+                      <StatusBadge status={activePanelOperator.availability} />
+                      {isDraftPendingSave && (
+                        <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-md bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+                          Unsaved Selection Preview
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-[#758078] mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className="font-mono text-[#202A24]">{selectedOperator.primaryPhone}</span>
+                      <span className="font-mono text-[#202A24]">{activePanelOperator.primaryPhone}</span>
                       <span aria-hidden="true">·</span>
-                      <span className="font-mono">{selectedOperator.vehiclePlate || 'No plate'}</span>
+                      <span className="font-mono">{activePanelOperator.vehiclePlate || 'No plate'}</span>
                       <span aria-hidden="true">·</span>
-                      <span>{selectedOperator.vehicleType}</span>
+                      <span>{activePanelOperator.vehicleType}</span>
                       <span aria-hidden="true">·</span>
-                      <span>{formatLitres(selectedOperator.tankCapacityLitres)}</span>
+                      <span>{formatLitres(activePanelOperator.tankCapacityLitres)}</span>
                       <span aria-hidden="true">·</span>
                       <span>
-                        {selectedOperator.subcityName} ({selectedOperator.neighbourhoodName})
+                        {activePanelOperator.subcityName} ({activePanelOperator.neighbourhoodName})
                       </span>
                     </p>
                   </div>
                 </div>
 
                 {/* Visible Call Operator tel: link */}
-                <a
-                  href={toTelHref(selectedOperator.primaryPhone)}
-                  className="inline-flex items-center justify-center gap-2 min-h-[44px] sm:min-h-[38px] px-4 py-2.5 text-xs font-semibold text-white bg-[#123C2A] rounded-lg hover:bg-[#0E2F21] transition-colors whitespace-nowrap shrink-0 w-full sm:w-auto"
-                >
-                  <Phone className="w-3.5 h-3.5" />
-                  Call Operator ({selectedOperator.primaryPhone})
-                </a>
+                {isCallablePhone(activePanelOperator.primaryPhone) && (
+                  <a
+                    href={toTelHref(activePanelOperator.primaryPhone)}
+                    className="inline-flex items-center justify-center gap-2 min-h-[44px] sm:min-h-[38px] px-4 py-2.5 text-xs font-semibold text-white bg-[#123C2A] rounded-lg hover:bg-[#0E2F21] transition-colors whitespace-nowrap shrink-0 w-full sm:w-auto"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    Call Operator ({activePanelOperator.primaryPhone})
+                  </a>
+                )}
               </div>
 
-              {canAssign ? (
+              {isDraftPendingSave ? (
+                <div className="p-4 bg-[#F7F6F0] border border-[#E6EAE5] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1 min-w-0">
+                    <h5 className="text-xs font-semibold text-[#202A24]">
+                      {workflow?.assignmentId
+                        ? 'Confirm Operator Change'
+                        : 'Confirm Assignment Creation'}
+                    </h5>
+                    <p className="text-xs text-[#758078] leading-relaxed">
+                      Selecting an operator is temporary until confirmed. Click “Create Assignment” to save a pending assignment in{' '}
+                      <span className="font-mono text-[#202A24]">service_assignments</span>, then record your call outcome and confirm dispatch.
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => setDraftOperatorId(null)}
+                      className="min-h-[44px] sm:min-h-[38px] px-4 py-2 text-xs font-medium text-[#5C665F] bg-white border border-[#E6EAE5] rounded-lg hover:bg-[#F7F6F0] transition-colors disabled:opacity-50"
+                    >
+                      Clear Selection
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => setCreateAssignConfirmOpen(true)}
+                      className="min-h-[44px] sm:min-h-[38px] px-4 py-2 text-xs font-semibold text-white bg-[#123C2A] rounded-lg hover:bg-[#0E2F21] transition-colors disabled:opacity-50"
+                    >
+                      {workflow?.assignmentId ? 'Update Assignment Operator' : 'Create Assignment'}
+                    </button>
+                  </div>
+                </div>
+              ) : canAssign ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   {/* Step 2: Record Call Outcome */}
                   <div className="space-y-3">
@@ -451,9 +503,9 @@ export function ServiceRequestDetailPage() {
                         onChange={(e) => setCallOutcome(e.target.value as CallOutcome)}
                         className="w-full min-h-[44px] sm:min-h-[36px] px-3 py-2 text-xs bg-white border border-[#E6EAE5] rounded-lg focus:outline-none focus:border-[#123C2A]"
                       >
-                        {CALL_OUTCOMES.map((co) => (
-                          <option key={co} value={co}>
-                            {co}
+                        {CALL_OUTCOME_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
                           </option>
                         ))}
                       </select>
@@ -492,12 +544,12 @@ export function ServiceRequestDetailPage() {
                       </h5>
                       <p className="text-xs text-[#758078] mt-1 leading-relaxed">
                         {workflow?.contactedAt
-                          ? `Last call logged (${formatDateTime(workflow.contactedAt)}): ${workflow.callOutcome}.`
+                          ? `Last call logged (${formatDateTime(workflow.contactedAt)}): ${formatCallOutcomeLabel(workflow.callOutcome)}.`
                           : 'Call the operator and record the call outcome before confirming assignment.'}
                       </p>
-                      {workflow?.contactedAt && workflow.callOutcome !== 'Answered - Accepted' && (
+                      {workflow?.contactedAt && workflow.callOutcome !== 'accepted' && (
                         <p className="text-xs text-[#92400E] bg-[#FEF3C7] border border-[#FDE68A] rounded-lg px-2.5 py-2 mt-2">
-                          Confirmation requires “Answered - Accepted”. Call again, choose another operator, or cancel this selection.
+                          Confirmation requires “Accepted”. Call again, choose another operator, or cancel this selection.
                         </p>
                       )}
                       {workflow?.callNotes && (
@@ -508,11 +560,11 @@ export function ServiceRequestDetailPage() {
                     <div className="space-y-2">
                       <button
                         type="button"
-                        disabled={isBusy || workflow?.callOutcome !== 'Answered - Accepted'}
+                        disabled={isBusy || workflow?.callOutcome !== 'accepted'}
                         onClick={() => setConfirmAssignOpen(true)}
                         className="w-full min-h-[44px] sm:min-h-[38px] px-4 py-2.5 text-xs font-semibold text-white bg-[#123C2A] rounded-lg hover:bg-[#0E2F21] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       >
-                        Confirm Assignment to {selectedOperator.fullName}
+                        Confirm Assignment to {activePanelOperator.fullName}
                       </button>
                       <button
                         type="button"
@@ -529,8 +581,7 @@ export function ServiceRequestDetailPage() {
                 <div className="p-3.5 bg-[#DCE8DF]/40 border border-[#C3D9C9] rounded-lg text-xs text-[#123C2A] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <span className="font-semibold">Assignment Active:</span>{' '}
-                    Assigned to {selectedOperator.fullName}
-                    {workflow?.confirmedBy ? ` by ${workflow.confirmedBy}` : ''}.
+                    Assigned to {activePanelOperator.fullName}.
                   </div>
                   <div className="flex flex-wrap items-center gap-3 shrink-0">
                     {request.status === 'Assigned' && (
@@ -544,7 +595,7 @@ export function ServiceRequestDetailPage() {
                       </button>
                     )}
                     <Link
-                      to={`/operators/${selectedOperator.id}`}
+                      to={`/operators/${activePanelOperator.id}`}
                       className="font-medium underline whitespace-nowrap py-1"
                     >
                       View Operator
@@ -647,7 +698,9 @@ export function ServiceRequestDetailPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                   {availableOperators.map(({ operator: op, priorityTier, priorityLabel }) => {
-                    const isSelected = workflow?.selectedOperatorId === op.id;
+                    const isPersistedSelected = workflow?.selectedOperatorId === op.id;
+                    const isDraftSelected = draftOperatorId === op.id;
+                    const isSelected = isDraftSelected || (!isDraftPendingSave && isPersistedSelected);
                     const callable = isCallablePhone(op.primaryPhone);
                     return (
                       <div
@@ -731,7 +784,9 @@ export function ServiceRequestDetailPage() {
                           <button
                             type="button"
                             disabled={isBusy}
-                            onClick={() => void runAction(() => selectOperatorForRequest(request.id, op.id))}
+                            onClick={() =>
+                              setDraftOperatorId((prev) => (prev === op.id ? null : op.id))
+                            }
                             className={`${
                               callable ? '' : 'sm:col-span-2'
                             } inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[38px] py-2 px-3 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 ${
@@ -741,7 +796,13 @@ export function ServiceRequestDetailPage() {
                             }`}
                           >
                             {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
-                            <span>{isSelected ? 'Selected Operator' : 'Select Operator'}</span>
+                            <span>
+                              {isDraftSelected
+                                ? 'Preview Selected'
+                                : isPersistedSelected && !isDraftPendingSave
+                                ? 'Assigned (Pending)'
+                                : 'Select Operator'}
+                            </span>
                           </button>
                         </div>
                       </div>
@@ -755,12 +816,33 @@ export function ServiceRequestDetailPage() {
       </div>
 
       <ConfirmDialog
+        open={createAssignConfirmOpen}
+        onClose={() => setCreateAssignConfirmOpen(false)}
+        onConfirm={() =>
+          void runAction(async () => {
+            if (!draftOperator) return;
+            const ok = await createPendingAssignmentForRequest(request.id, draftOperator.id);
+            if (ok) {
+              setDraftOperatorId(null);
+            }
+          })
+        }
+        title={
+          workflow?.assignmentId
+            ? 'Update pending operator assignment?'
+            : 'Create operator assignment?'
+        }
+        description={`Save ${draftOperator?.fullName ?? 'this operator'} as the pending operator assignment for ${request.referenceNumber} (${request.subcityName} · ${request.neighbourhoodName}) in service_assignments?`}
+        confirmLabel={workflow?.assignmentId ? 'Update Assignment' : 'Create Assignment'}
+      />
+
+      <ConfirmDialog
         open={confirmAssignOpen}
         onClose={() => setConfirmAssignOpen(false)}
         onConfirm={() => void runAction(() => confirmRequestAssignment(request.id))}
         title="Confirm operator assignment?"
         description={`Assign ${request.referenceNumber} (${request.subcityName} · ${request.neighbourhoodName}) to ${
-          selectedOperator?.fullName ?? 'this operator'
+          persistedOperator?.fullName ?? 'this operator'
         }? Their status will be updated to Assigned.`}
         confirmLabel="Confirm Assignment"
       />
@@ -768,7 +850,12 @@ export function ServiceRequestDetailPage() {
       <ConfirmDialog
         open={cancelAssignOpen}
         onClose={() => setCancelAssignOpen(false)}
-        onConfirm={() => void runAction(() => cancelRequestAssignment(request.id))}
+        onConfirm={() =>
+          void runAction(async () => {
+            await cancelRequestAssignment(request.id);
+            setDraftOperatorId(null);
+          })
+        }
         tone="danger"
         title={`Cancel operator assignment for ${request.referenceNumber}?`}
         description="This releases the selected/assigned operator back to Available and returns the service request to Pending status for reassignment."
