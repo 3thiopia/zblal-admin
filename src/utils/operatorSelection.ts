@@ -172,14 +172,14 @@ export function getEligiblePrioritizedOperators(params: {
     if (q) {
       const nameMatch = operator.fullName.toLowerCase().includes(q);
       const plateMatch = operator.vehiclePlate.toLowerCase().includes(q);
-      const primaryPhoneMatch = operator.primaryPhone.toLowerCase().includes(q);
-      const secondaryPhoneMatch = operator.secondaryPhone
-        ? operator.secondaryPhone.toLowerCase().includes(q)
+      const primaryPhoneMatch = operator.phone_e164.toLowerCase().includes(q);
+      const secondaryPhoneMatch = operator.secondary_phone_e164
+        ? operator.secondary_phone_e164.toLowerCase().includes(q)
         : false;
       const digitsMatch =
         qDigits.length >= 2 &&
-        (operator.primaryPhone.replace(/\D/g, '').includes(qDigits) ||
-          Boolean(operator.secondaryPhone?.replace(/\D/g, '').includes(qDigits)));
+        (operator.phone_e164.replace(/\D/g, '').includes(qDigits) ||
+          Boolean(operator.secondary_phone_e164?.replace(/\D/g, '').includes(qDigits)));
 
       if (
         !nameMatch &&

@@ -425,7 +425,19 @@ export function ServiceRequestDetailPage() {
                       )}
                     </div>
                     <p className="text-xs text-[#758078] mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className="font-mono text-[#202A24]">{activePanelOperator.primaryPhone}</span>
+                      <span className="font-mono font-semibold text-[#123C2A]">
+                        {isCallablePhone(activePanelOperator.phone_e164)
+                          ? activePanelOperator.phone_e164
+                          : 'No phone on file'}
+                      </span>
+                      {activePanelOperator.secondary_phone_e164 && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="font-mono">
+                            Alt: {activePanelOperator.secondary_phone_e164}
+                          </span>
+                        </>
+                      )}
                       <span aria-hidden="true">·</span>
                       <span className="font-mono">{activePanelOperator.vehiclePlate || 'No plate'}</span>
                       <span aria-hidden="true">·</span>
@@ -441,13 +453,13 @@ export function ServiceRequestDetailPage() {
                 </div>
 
                 {/* Visible Call Operator tel: link */}
-                {isCallablePhone(activePanelOperator.primaryPhone) && (
+                {isCallablePhone(activePanelOperator.phone_e164) && (
                   <a
-                    href={toTelHref(activePanelOperator.primaryPhone)}
+                    href={toTelHref(activePanelOperator.phone_e164)}
                     className="inline-flex items-center justify-center gap-2 min-h-[44px] sm:min-h-[38px] px-4 py-2.5 text-xs font-semibold text-white bg-[#123C2A] rounded-lg hover:bg-[#0E2F21] transition-colors whitespace-nowrap shrink-0 w-full sm:w-auto"
                   >
                     <Phone className="w-3.5 h-3.5" />
-                    Call Operator ({activePanelOperator.primaryPhone})
+                    Call Operator ({activePanelOperator.phone_e164})
                   </a>
                 )}
               </div>
@@ -701,7 +713,7 @@ export function ServiceRequestDetailPage() {
                     const isPersistedSelected = workflow?.selectedOperatorId === op.id;
                     const isDraftSelected = draftOperatorId === op.id;
                     const isSelected = isDraftSelected || (!isDraftPendingSave && isPersistedSelected);
-                    const callable = isCallablePhone(op.primaryPhone);
+                    const callable = isCallablePhone(op.phone_e164);
                     return (
                       <div
                         key={op.id}
@@ -728,8 +740,13 @@ export function ServiceRequestDetailPage() {
                           </p>
                           <p className="inline-flex items-center gap-1.5 text-xs font-mono font-semibold text-[#123C2A] break-all">
                             <Phone className="w-3.5 h-3.5 shrink-0" />
-                            <span>{callable ? op.primaryPhone : 'No phone on file'}</span>
+                            <span>{callable ? op.phone_e164 : 'No phone on file'}</span>
                           </p>
+                          {op.secondary_phone_e164 && isCallablePhone(op.secondary_phone_e164) && (
+                            <p className="text-[11px] font-mono text-[#758078] break-all">
+                              Alt: {op.secondary_phone_e164}
+                            </p>
+                          )}
                         </div>
 
                         {/* Location & Vehicle Details */}
@@ -772,8 +789,8 @@ export function ServiceRequestDetailPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
                           {callable && (
                             <a
-                              href={toTelHref(op.primaryPhone)}
-                              aria-label={`Call ${op.fullName} at ${op.primaryPhone}`}
+                              href={toTelHref(op.phone_e164)}
+                              aria-label={`Call ${op.fullName} at ${op.phone_e164}`}
                               className="inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-3 py-2 text-xs font-semibold text-[#123C2A] bg-white border border-[#123C2A]/30 rounded-lg hover:bg-[#DCE8DF]/50 transition-colors"
                             >
                               <Phone className="w-3.5 h-3.5 shrink-0" />

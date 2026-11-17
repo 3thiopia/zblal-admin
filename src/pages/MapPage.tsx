@@ -13,6 +13,7 @@ import {
   Loader2,
   MapPin,
   SlidersHorizontal,
+  X,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
@@ -193,8 +194,13 @@ export function MapPage() {
   const hasFittedBoundsRef = useRef(false);
 
   const [popupState, setPopupState] = useState<{
+    key: string;
     group: NeighbourhoodMapGroup;
     container: HTMLDivElement;
+  } | null>(null);
+  const [mobileSheetState, setMobileSheetState] = useState<{
+    key: string;
+    group: NeighbourhoodMapGroup;
   } | null>(null);
 
   const subcityMap = useMemo(
@@ -264,7 +270,8 @@ export function MapPage() {
       if (q) {
         const matches =
           op.fullName.toLowerCase().includes(q) ||
-          op.primaryPhone.toLowerCase().includes(q) ||
+          op.phone_e164.toLowerCase().includes(q) ||
+          Boolean(op.secondary_phone_e164?.toLowerCase().includes(q)) ||
           op.vehiclePlate.toLowerCase().includes(q);
         if (!matches) return false;
       }
@@ -393,6 +400,10 @@ export function MapPage() {
       setPopupState(null);
     });
 
+    map.on('click', () => {
+      setMobileSheetState(null);
+    });
+
     return () => {
       map.remove();
       mapInstanceRef.current = null;
@@ -408,6 +419,7 @@ export function MapPage() {
 
     layerGroup.clearLayers();
     setPopupState(null);
+    setMobileSheetState(null);
 
     if (mappedGroups.length === 0) return;
 
@@ -422,17 +434,29 @@ export function MapPage() {
       });
 
       marker.on('click', () => {
+        const selectionKey = `${group.neighbourhoodId}-${Date.now()}`;
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+
+        if (isMobile) {
+          map.closePopup();
+          setPopupState(null);
+          map.panTo(pos, { animate: true });
+          setMobileSheetState({ key: selectionKey, group });
+          return;
+        }
+
+        setMobileSheetState(null);
         const container = document.createElement('div');
         marker
           .unbindPopup()
           .bindPopup(container, {
-            maxWidth: 320,
-            minWidth: 210,
+            maxWidth: 328,
+            minWidth: 230,
             autoPan: true,
             autoPanPadding: [16, 16],
           })
           .openPopup();
-        setPopupState({ group, container });
+        setPopupState({ key: selectionKey, group, container });
       });
 
       marker.addTo(layerGroup);
@@ -833,12 +857,50 @@ export function MapPage() {
         )}
       </section>
 
-      {/* Portal for Leaflet Popup */}
+      {/* Portal for Desktop Leaflet Popup */}
       {popupState &&
         createPortal(
-          <MapPopupContent group={popupState.group} />,
+          <MapPopupContent key={popupState.key} group={popupState.group} variant="popup" />,
           popupState.container
         )}
+
+      {/* Mobile Bottom Sheet for Marker Quick Contact & Direct Navigation */}
+      {mobileSheetState && (
+        <div
+          className="sm:hidden fixed inset-x-0 bottom-0 z-[1000] pointer-events-none px-2 pb-2"
+          role="dialog"
+          aria-modal="false"
+          aria-label={`${mobileSheetState.group.neighbourhoodName} map details`}
+        >
+          <div className="pointer-events-auto bg-white border border-[#E6EAE5] rounded-2xl shadow-2xl overflow-hidden max-h-[72dvh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#E6EAE5] bg-[#F7F6F0]/80 shrink-0">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-[#202A24] truncate">
+                  {mobileSheetState.group.neighbourhoodName}
+                </p>
+                <p className="text-[11px] text-[#758078] truncate">
+                  {mobileSheetState.group.subcityName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileSheetState(null)}
+                aria-label="Close marker details"
+                className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] -mr-2 rounded-lg text-[#5C665F] hover:text-[#202A24] hover:bg-white transition-colors shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <MapPopupContent
+                key={mobileSheetState.key}
+                group={mobileSheetState.group}
+                variant="sheet"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

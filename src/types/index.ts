@@ -39,8 +39,8 @@ export interface Operator {
   id: string;
   vehicleId?: string;
   fullName: string;
-  primaryPhone: string;
-  secondaryPhone?: string;
+  phone_e164: string;
+  secondary_phone_e164?: string;
   vehiclePlate: string;
   vehicleType: string;
   tankCapacityLitres: number;
@@ -73,8 +73,13 @@ export type RequestPriority = 'Standard' | 'Urgent' | 'Emergency' | string;
 export interface ServicePriorityRecord {
   id: string;
   name: string;
+  nameEn: string;
+  nameAm: string;
   code: string;
   priceEtb: number;
+  minHours: number;
+  maxHours: number;
+  displayOrder: number;
   description?: string;
   active: boolean;
 }

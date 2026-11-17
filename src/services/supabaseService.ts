@@ -318,26 +318,66 @@ async function fetchRequestsRows(activeOnly: boolean) {
   return joined;
 }
 
+const OPERATOR_SELECT_COLUMNS =
+  'id, full_name, phone_e164, secondary_phone_e164, subcity_id, location_id, availability_status, is_active, internal_notes, created_at';
+const OPERATOR_SELECT_COLUMNS_MIN =
+  'id, full_name, phone_e164, secondary_phone_e164, subcity_id, location_id, availability_status, is_active, created_at';
+
 async function fetchOperatorRows(activeOnly: boolean) {
   const supabase = getSupabaseClient();
-  if (!activeOnly) {
-    return supabase.from('vehicle_operators').select('*');
+  const runQuery = (selectExpr: string) => {
+    let query = supabase.from('vehicle_operators').select(selectExpr);
+    if (activeOnly) {
+      query = query.or(
+        'availability_status.is.null,availability_status.not.in.("Unavailable","Suspended","unavailable","suspended")'
+      );
+    }
+    return query;
+  };
+
+  let res = await runQuery(OPERATOR_SELECT_COLUMNS);
+  if (res.error && res.error.message.toLowerCase().includes('internal_notes')) {
+    res = await runQuery(OPERATOR_SELECT_COLUMNS_MIN);
   }
-
-  const filtered = await supabase
-    .from('vehicle_operators')
-    .select('*')
-    .or(
-      'availability_status.is.null,availability_status.not.in.("Unavailable","Suspended","unavailable","suspended")'
-    );
-
   if (
-    filtered.error &&
-    filtered.error.message.toLowerCase().includes('availability_status')
+    activeOnly &&
+    res.error &&
+    res.error.message.toLowerCase().includes('availability_status')
   ) {
-    return supabase.from('vehicle_operators').select('*');
+    return supabase.from('vehicle_operators').select(OPERATOR_SELECT_COLUMNS);
   }
-  return filtered;
+  return res;
+}
+
+async function fetchServicePriorityRows() {
+  const supabase = getSupabaseClient();
+  const ordered = await supabase
+    .from('service_priorities')
+    .select('*')
+    .order('display_order', { ascending: true });
+
+  if (ordered.error && ordered.error.message.toLowerCase().includes('display_order')) {
+    return supabase.from('service_priorities').select('*');
+  }
+  return ordered;
+}
+
+function resolveRequestPriceEtb(
+  row: Record<string, unknown>,
+  priorityRecord?: ServicePriorityRecord
+): number {
+  const rawSnapshot =
+    row.price_etb ??
+    row.quoted_price_etb ??
+    row.price_snapshot_etb ??
+    row.total_price;
+  if (rawSnapshot !== null && rawSnapshot !== undefined && rawSnapshot !== '') {
+    const parsed = Number(rawSnapshot);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return parsed;
+    }
+  }
+  return Number(priorityRecord?.priceEtb ?? 0);
 }
 
 function buildAdminDataset(params: {
@@ -390,14 +430,30 @@ function buildAdminDataset(params: {
   }));
   const locationMap = new Map(neighbourhoods.map((n) => [n.id, n]));
 
-  const priorities: ServicePriorityRecord[] = priorityRows.map((r) => ({
-    id: String(r.id),
-    name: String(r.name ?? r.label ?? r.title ?? 'Standard'),
-    code: String(r.code ?? r.slug ?? r.name ?? 'standard'),
-    priceEtb: Number(r.price_etb ?? r.price ?? r.base_price ?? 0),
-    description: r.description ? String(r.description) : undefined,
-    active: r.is_active !== false && r.active !== false,
-  }));
+  const priorities: ServicePriorityRecord[] = priorityRows
+    .map((r, index) => {
+      const nameEn = String(
+        r.name_en ?? r.name ?? r.label ?? r.title ?? 'Standard'
+      ).trim();
+      const nameAm = String(r.name_am ?? r.amharic_name ?? '').trim();
+      const parsedMin = Number(r.min_hours ?? 0);
+      const parsedMax = Number(r.max_hours ?? 0);
+      const parsedOrder = Number(r.display_order ?? index + 1);
+      return {
+        id: String(r.id),
+        name: nameEn,
+        nameEn,
+        nameAm,
+        code: String(r.code ?? r.slug ?? nameEn.toLowerCase()),
+        priceEtb: Number(r.price_etb ?? r.price ?? r.base_price ?? 0),
+        minHours: Number.isFinite(parsedMin) && parsedMin > 0 ? parsedMin : 0,
+        maxHours: Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : 0,
+        displayOrder: Number.isFinite(parsedOrder) ? parsedOrder : index + 1,
+        description: r.description ? String(r.description) : undefined,
+        active: r.is_active !== false && r.active !== false,
+      };
+    })
+    .sort((a, b) => a.displayOrder - b.displayOrder || a.nameEn.localeCompare(b.nameEn));
   const priorityMap = new Map(priorities.map((p) => [p.id, p]));
 
   const customers: Customer[] = customerRows.map((r) => {
@@ -490,7 +546,7 @@ function buildAdminDataset(params: {
     const reqId = String(r.id);
     const pId = r.priority_id ? String(r.priority_id) : undefined;
     const priorityObj = pId ? priorityMap.get(pId) : undefined;
-    const price = Number(priorityObj?.priceEtb ?? r.price_etb ?? r.total_price ?? 0);
+    const price = resolveRequestPriceEtb(r, priorityObj);
     requestPriceById.set(reqId, price);
     requestStatusById.set(reqId, normalizeRequestStatus(r.status));
   });
@@ -524,12 +580,17 @@ function buildAdminDataset(params: {
       r.active !== false &&
       String(r.status ?? 'active').trim().toLowerCase() !== 'inactive';
 
+    const phoneE164 = r.phone_e164 ? String(r.phone_e164).trim() : '';
+    const secondaryPhoneE164 = r.secondary_phone_e164
+      ? String(r.secondary_phone_e164).trim()
+      : undefined;
+
     return {
       id,
       vehicleId: vehicle?.id,
       fullName: String(r.full_name ?? r.name ?? ''),
-      primaryPhone: String(r.primary_phone ?? r.phone ?? ''),
-      secondaryPhone: r.secondary_phone ? String(r.secondary_phone) : undefined,
+      phone_e164: phoneE164,
+      secondary_phone_e164: secondaryPhoneE164,
       vehiclePlate: vehicle?.plateNumber ?? '',
       vehicleType: vehicle?.vehicleType ?? 'Medium Tanker',
       tankCapacityLitres: vehicle?.tankCapacityLitres ?? 0,
@@ -722,9 +783,7 @@ function buildAdminDataset(params: {
       estimatedVolumeLitres: Number(
         r.estimated_volume_litres ?? r.tank_size_litres ?? 0
       ),
-      priceEtb: Number(
-        priorityRecord?.priceEtb ?? r.price_etb ?? r.total_price ?? 0
-      ),
+      priceEtb: resolveRequestPriceEtb(r, priorityRecord),
       submittedAt,
       status: derivedStatus,
       assignedOperatorId,
@@ -783,7 +842,7 @@ export async function loadAllAdminData(): Promise<LoadedAdminDataset> {
   ] = await Promise.all([
     supabase.from('subcities').select('*'),
     supabase.from('locations').select('*'),
-    supabase.from('service_priorities').select('*'),
+    fetchServicePriorityRows(),
     supabase.from('customers').select('*'),
     fetchOperatorRows(false),
     supabase.from('operator_vehicles').select('*'),
@@ -845,7 +904,7 @@ export async function loadActiveMapRecords(): Promise<ActiveMapRecords> {
   ] = await Promise.all([
     supabase.from('subcities').select('*'),
     supabase.from('locations').select('*'),
-    supabase.from('service_priorities').select('*'),
+    fetchServicePriorityRows(),
     supabase.from('customers').select('*'),
     fetchOperatorRows(true),
     supabase.from('operator_vehicles').select('*'),
@@ -889,10 +948,18 @@ export async function loadActiveMapRecords(): Promise<ActiveMapRecords> {
   };
 }
 
+function formatToPhoneE164(raw: string): string {
+  const cleaned = raw.replace(/[\s()-]/g, '');
+  if (/^09\d{8}$/.test(cleaned)) {
+    return `+251${cleaned.slice(1)}`;
+  }
+  return cleaned;
+}
+
 export async function createOperatorWithVehicle(input: {
   fullName: string;
-  primaryPhone: string;
-  secondaryPhone?: string;
+  phone_e164: string;
+  secondary_phone_e164?: string;
   vehiclePlate: string;
   vehicleType: string;
   tankCapacityLitres: number;
@@ -909,8 +976,10 @@ export async function createOperatorWithVehicle(input: {
     .from('vehicle_operators')
     .insert({
       full_name: input.fullName,
-      primary_phone: input.primaryPhone,
-      secondary_phone: input.secondaryPhone || null,
+      phone_e164: formatToPhoneE164(input.phone_e164),
+      secondary_phone_e164: input.secondary_phone_e164
+        ? formatToPhoneE164(input.secondary_phone_e164)
+        : null,
       subcity_id: input.subcityId || null,
       location_id: input.neighbourhoodId || null,
       availability_status: toDbOperatorStatus(
@@ -920,14 +989,14 @@ export async function createOperatorWithVehicle(input: {
       is_active: true,
       internal_notes: input.internalNotes || null,
     })
-    .select('*')
+    .select(OPERATOR_SELECT_COLUMNS)
     .single();
 
   if (opError || !opData) {
     throw new Error(opError?.message ?? 'Failed to insert into vehicle_operators.');
   }
 
-  const operatorId = String((opData as Record<string, unknown>).id);
+  const operatorId = String((opData as unknown as Record<string, unknown>).id);
 
   const { error: vehError } = await supabase.from('operator_vehicles').insert({
     operator_id: operatorId,
@@ -954,9 +1023,13 @@ export async function updateOperatorAndVehicle(
 
   const operatorPayload: Record<string, unknown> = {};
   if (updates.fullName !== undefined) operatorPayload.full_name = updates.fullName;
-  if (updates.primaryPhone !== undefined) operatorPayload.primary_phone = updates.primaryPhone;
-  if (updates.secondaryPhone !== undefined) {
-    operatorPayload.secondary_phone = updates.secondaryPhone || null;
+  if (updates.phone_e164 !== undefined) {
+    operatorPayload.phone_e164 = formatToPhoneE164(updates.phone_e164);
+  }
+  if (updates.secondary_phone_e164 !== undefined) {
+    operatorPayload.secondary_phone_e164 = updates.secondary_phone_e164
+      ? formatToPhoneE164(updates.secondary_phone_e164)
+      : null;
   }
   if (updates.subcityId !== undefined) operatorPayload.subcity_id = updates.subcityId || null;
   if (updates.neighbourhoodId !== undefined) {
@@ -1405,4 +1478,67 @@ export async function createLocationRecord(
     is_active: true,
   });
   if (error) throw new Error(error.message);
+}
+
+export interface UpdateServicePriorityInput {
+  id: string;
+  nameEn: string;
+  nameAm: string;
+  priceEtb: number;
+  minHours: number;
+  maxHours: number;
+  isActive: boolean;
+  displayOrder: number;
+}
+
+export async function updateServicePriorityRecord(
+  input: UpdateServicePriorityInput
+): Promise<void> {
+  const supabase = getSupabaseClient();
+  const nameEn = input.nameEn.trim();
+  const nameAm = input.nameAm.trim();
+
+  if (!nameEn) {
+    throw new Error('English service name is required.');
+  }
+  if (!nameAm) {
+    throw new Error('Amharic service name is required.');
+  }
+  if (!Number.isFinite(input.priceEtb) || input.priceEtb <= 0) {
+    throw new Error('Price (ETB) must be a positive number greater than 0.');
+  }
+  if (!Number.isFinite(input.minHours) || input.minHours <= 0) {
+    throw new Error('Minimum timeframe (hours) must be a positive number greater than 0.');
+  }
+  if (!Number.isFinite(input.maxHours) || input.maxHours < input.minHours) {
+    throw new Error(
+      'Maximum timeframe (hours) must be greater than or equal to minimum timeframe.'
+    );
+  }
+  if (!Number.isFinite(input.displayOrder) || input.displayOrder < 1) {
+    throw new Error('Display order must be a positive integer (1 or higher).');
+  }
+
+  const { data, error } = await supabase
+    .from('service_priorities')
+    .update({
+      name_en: nameEn,
+      name_am: nameAm,
+      price_etb: Math.round(input.priceEtb),
+      min_hours: Math.round(input.minHours),
+      max_hours: Math.round(input.maxHours),
+      is_active: input.isActive,
+      display_order: Math.round(input.displayOrder),
+    })
+    .eq('id', input.id)
+    .select('id');
+
+  if (error) {
+    throw new Error(error.message);
+  }
+  if (!data || data.length === 0) {
+    throw new Error(
+      'Unable to update service priority. Confirm your authenticated staff role has permission to edit service_priorities.'
+    );
+  }
 }

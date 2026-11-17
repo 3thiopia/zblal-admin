@@ -16,7 +16,7 @@ import { Pagination } from '../components/ui/Pagination';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ViewModeToggle } from '../components/ui/ViewModeToggle';
 import { useResponsiveViewMode } from '../hooks/useResponsiveViewMode';
-import { formatDate, formatLitres, toTelHref } from '../utils/formatters';
+import { formatDate, formatLitres, isCallablePhone, toTelHref } from '../utils/formatters';
 import { OperatorStatus, VehicleType } from '../types';
 
 const PAGE_SIZE = 6;
@@ -73,7 +73,8 @@ export function OperatorsPage() {
         if (q) {
           const matchesText =
             op.fullName.toLowerCase().includes(q) ||
-            op.primaryPhone.toLowerCase().includes(q) ||
+            op.phone_e164.toLowerCase().includes(q) ||
+            Boolean(op.secondary_phone_e164?.toLowerCase().includes(q)) ||
             op.vehiclePlate.toLowerCase().includes(q);
           if (!matchesText) return false;
         }
@@ -296,9 +297,27 @@ export function OperatorsPage() {
                       </p>
                     </td>
                     <td className="py-3.5 px-4 font-mono text-xs text-[#202A24] whitespace-nowrap">
-                      <a href={toTelHref(op.primaryPhone)} className="hover:text-[#123C2A] hover:underline">
-                        {op.primaryPhone}
-                      </a>
+                      {isCallablePhone(op.phone_e164) ? (
+                        <div className="space-y-0.5">
+                          <a
+                            href={toTelHref(op.phone_e164)}
+                            className="inline-flex items-center gap-1.5 font-semibold text-[#123C2A] hover:underline"
+                          >
+                            <Phone className="w-3 h-3 shrink-0" />
+                            <span>{op.phone_e164}</span>
+                          </a>
+                          {op.secondary_phone_e164 && isCallablePhone(op.secondary_phone_e164) && (
+                            <a
+                              href={toTelHref(op.secondary_phone_e164)}
+                              className="block text-[11px] text-[#758078] hover:text-[#123C2A] hover:underline"
+                            >
+                              Alt: {op.secondary_phone_e164}
+                            </a>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[#758078]">No phone on file</span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 font-mono text-xs font-medium text-[#202A24] whitespace-nowrap">
                       {op.vehiclePlate || '—'}
@@ -381,12 +400,22 @@ export function OperatorsPage() {
                         </div>
                         <div className="min-w-0 flex-1 flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <h3 className="text-sm font-semibold text-[#202A24] truncate">
+                            <h3 className="text-sm font-semibold text-[#202A24] break-words">
                               {op.fullName}
                             </h3>
-                            <p className="text-xs font-mono text-[#758078] mt-0.5 truncate">
-                              {op.primaryPhone}
+                            <p className="inline-flex items-center gap-1.5 text-xs font-mono font-semibold text-[#123C2A] mt-1 break-all">
+                              <Phone className="w-3.5 h-3.5 shrink-0" />
+                              <span>
+                                {isCallablePhone(op.phone_e164)
+                                  ? op.phone_e164
+                                  : 'No phone on file'}
+                              </span>
                             </p>
+                            {op.secondary_phone_e164 && isCallablePhone(op.secondary_phone_e164) && (
+                              <p className="text-[11px] font-mono text-[#758078] mt-0.5 break-all">
+                                Alt: {op.secondary_phone_e164}
+                              </p>
+                            )}
                           </div>
                           <StatusBadge status={op.availability} />
                         </div>
@@ -465,13 +494,16 @@ export function OperatorsPage() {
                     </div>
 
                     <div className="flex items-center gap-2 pt-2.5 border-t border-[#E6EAE5]">
-                      <a
-                        href={toTelHref(op.primaryPhone)}
-                        className="inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-3.5 py-2 text-xs font-medium text-[#123C2A] bg-[#F7F6F0] border border-[#E6EAE5] rounded-lg hover:bg-[#DCE8DF] transition-colors shrink-0"
-                      >
-                        <Phone className="w-3.5 h-3.5" />
-                        Call
-                      </a>
+                      {isCallablePhone(op.phone_e164) && (
+                        <a
+                          href={toTelHref(op.phone_e164)}
+                          aria-label={`Call ${op.fullName} at ${op.phone_e164}`}
+                          className="inline-flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[38px] px-3.5 py-2 text-xs font-semibold text-[#123C2A] bg-[#F7F6F0] border border-[#E6EAE5] rounded-lg hover:bg-[#DCE8DF] transition-colors shrink-0"
+                        >
+                          <Phone className="w-3.5 h-3.5" />
+                          Call
+                        </a>
+                      )}
                       <Link
                         to={`/operators/${op.id}`}
                         className="flex-1 inline-flex items-center justify-center min-h-[44px] sm:min-h-[38px] px-3 py-2 text-xs font-medium text-white bg-[#123C2A] rounded-lg hover:bg-[#0E2F21] transition-colors"

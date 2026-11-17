@@ -28,6 +28,8 @@ import {
   toggleLocationStatusRecord,
   toggleSubcityStatusRecord,
   updateOperatorAndVehicle,
+  updateServicePriorityRecord,
+  UpdateServicePriorityInput,
   updateServiceRequestStatusRecord,
 } from '../services/supabaseService';
 import { useAuth } from './AuthContext';
@@ -70,8 +72,8 @@ interface AppContextValue {
   dismissToast: (id: string) => void;
   addOperator: (input: {
     fullName: string;
-    primaryPhone: string;
-    secondaryPhone?: string;
+    phone_e164: string;
+    secondary_phone_e164?: string;
     vehiclePlate: string;
     vehicleType: string;
     tankCapacityLitres: number;
@@ -97,6 +99,7 @@ interface AppContextValue {
   toggleNeighbourhoodActive: (neighbourhoodId: string) => Promise<void>;
   addSubcity: (nameEn: string, nameAm: string) => Promise<void>;
   addNeighbourhood: (subcityId: string, nameEn: string, nameAm: string) => Promise<void>;
+  updateServicePriority: (input: UpdateServicePriorityInput) => Promise<void>;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   updateSettings: (updates: Partial<SystemSettings>) => void;
@@ -233,6 +236,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'vehicle_operators' },
+        scheduleRefresh
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'service_priorities' },
         scheduleRefresh
       )
       .subscribe();
@@ -542,6 +550,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateServicePriority: AppContextValue['updateServicePriority'] = async (input) => {
+    try {
+      await updateServicePriorityRecord(input);
+      await refreshData();
+      addToast(
+        'Service pricing updated',
+        `${input.nameEn.trim()} (${input.priceEtb.toLocaleString()} ETB) saved to Supabase.`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update service priority.';
+      addToast('Update failed', msg, 'error');
+      throw err;
+    }
+  };
+
   const markNotificationRead = (id: string) => {
     setReadNotificationIds((prev) => ({ ...prev, [id]: true }));
   };
@@ -557,7 +580,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateSettings = (updates: Partial<SystemSettings>) => {
     setSettings((prev) => ({ ...prev, ...updates }));
-    addToast('Preferences updated', 'Session preferences updated.');
+    addToast(
+      'Session preferences updated',
+      'Applied to this browser session only (no database settings table exists yet).',
+      'info'
+    );
   };
 
   return (
@@ -601,6 +628,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toggleNeighbourhoodActive,
         addSubcity,
         addNeighbourhood,
+        updateServicePriority,
         markNotificationRead,
         markAllNotificationsRead,
         updateSettings,

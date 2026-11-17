@@ -195,7 +195,7 @@ export function Header() {
         (o) =>
           o.fullName.toLowerCase().includes(q) ||
           o.vehiclePlate.toLowerCase().includes(q) ||
-          o.primaryPhone.toLowerCase().includes(q)
+          o.phone_e164.toLowerCase().includes(q)
       )
       .slice(0, 3)
       .map((o) => ({

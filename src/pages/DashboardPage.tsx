@@ -507,6 +507,11 @@ export function DashboardPage() {
                     >
                       {op.fullName}
                     </Link>
+                    {op.phone_e164 && (
+                      <p className="text-xs font-mono font-semibold text-[#123C2A] mt-0.5 truncate">
+                        {op.phone_e164}
+                      </p>
+                    )}
                     <p className="text-xs text-[#758078] mt-0.5 flex flex-wrap items-center gap-1.5">
                       <span className="font-mono">{op.vehiclePlate || 'No plate'}</span>
                       <span aria-hidden="true">·</span>
@@ -516,13 +521,15 @@ export function DashboardPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <a
-                      href={`tel:${op.primaryPhone.replace(/[^+\d]/g, '')}`}
-                      aria-label={`Call ${op.fullName}`}
-                      className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 p-2 rounded-lg border border-[#E6EAE5] text-[#123C2A] hover:bg-[#DCE8DF]/60 transition-colors"
-                    >
-                      <Phone className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                    </a>
+                    {op.phone_e164 && (
+                      <a
+                        href={`tel:${op.phone_e164.replace(/[^+\d]/g, '')}`}
+                        aria-label={`Call ${op.fullName}`}
+                        className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 p-2 rounded-lg border border-[#E6EAE5] text-[#123C2A] hover:bg-[#DCE8DF]/60 transition-colors"
+                      >
+                        <Phone className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                      </a>
+                    )}
                     <StatusBadge status={op.availability} />
                   </div>
                 </li>

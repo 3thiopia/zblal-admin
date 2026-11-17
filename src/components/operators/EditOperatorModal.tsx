@@ -30,8 +30,10 @@ export function EditOperatorModal({ operator, open, onClose }: EditOperatorModal
   const { subcities, neighbourhoods, updateOperator } = useApp();
 
   const [fullName, setFullName] = useState(operator.fullName);
-  const [primaryPhone, setPrimaryPhone] = useState(operator.primaryPhone);
-  const [secondaryPhone, setSecondaryPhone] = useState(operator.secondaryPhone ?? '');
+  const [phoneE164, setPhoneE164] = useState(operator.phone_e164);
+  const [secondaryPhoneE164, setSecondaryPhoneE164] = useState(
+    operator.secondary_phone_e164 ?? ''
+  );
   const [vehiclePlate, setVehiclePlate] = useState(operator.vehiclePlate);
   const [vehicleType, setVehicleType] = useState<string>(operator.vehicleType);
   const [tankCapacityLitres, setTankCapacityLitres] = useState(String(operator.tankCapacityLitres));
@@ -47,8 +49,8 @@ export function EditOperatorModal({ operator, open, onClose }: EditOperatorModal
   useEffect(() => {
     if (open) {
       setFullName(operator.fullName);
-      setPrimaryPhone(operator.primaryPhone);
-      setSecondaryPhone(operator.secondaryPhone ?? '');
+      setPhoneE164(operator.phone_e164);
+      setSecondaryPhoneE164(operator.secondary_phone_e164 ?? '');
       setVehiclePlate(operator.vehiclePlate);
       setVehicleType(operator.vehicleType);
       setTankCapacityLitres(String(operator.tankCapacityLitres));
@@ -87,7 +89,7 @@ export function EditOperatorModal({ operator, open, onClose }: EditOperatorModal
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanedPhone = primaryPhone.replace(/\s+/g, '');
+    const cleanedPhone = phoneE164.replace(/\s+/g, '');
     const capacity = Number(tankCapacityLitres);
 
     if (fullName.trim().length < 3) {
@@ -115,8 +117,8 @@ export function EditOperatorModal({ operator, open, onClose }: EditOperatorModal
     try {
       await updateOperator(operator.id, {
         fullName: fullName.trim(),
-        primaryPhone: primaryPhone.trim(),
-        secondaryPhone: secondaryPhone.trim() || undefined,
+        phone_e164: phoneE164.trim(),
+        secondary_phone_e164: secondaryPhoneE164.trim() || undefined,
         vehiclePlate: vehiclePlate.trim().toUpperCase(),
         vehicleType,
         tankCapacityLitres: capacity,
@@ -185,8 +187,8 @@ export function EditOperatorModal({ operator, open, onClose }: EditOperatorModal
             <label className="block text-xs font-medium text-[#202A24] mb-1">Primary Phone</label>
             <input
               type="tel"
-              value={primaryPhone}
-              onChange={(e) => setPrimaryPhone(e.target.value)}
+              value={phoneE164}
+              onChange={(e) => setPhoneE164(e.target.value)}
               className="w-full min-h-[44px] sm:min-h-[38px] px-3 py-2 text-sm font-mono border border-[#E6EAE5] rounded-lg focus:outline-none focus:border-[#123C2A]"
             />
           </div>
@@ -194,8 +196,8 @@ export function EditOperatorModal({ operator, open, onClose }: EditOperatorModal
             <label className="block text-xs font-medium text-[#202A24] mb-1">Secondary Phone</label>
             <input
               type="tel"
-              value={secondaryPhone}
-              onChange={(e) => setSecondaryPhone(e.target.value)}
+              value={secondaryPhoneE164}
+              onChange={(e) => setSecondaryPhoneE164(e.target.value)}
               className="w-full min-h-[44px] sm:min-h-[38px] px-3 py-2 text-sm font-mono border border-[#E6EAE5] rounded-lg focus:outline-none focus:border-[#123C2A]"
             />
           </div>

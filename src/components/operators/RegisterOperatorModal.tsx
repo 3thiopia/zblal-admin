@@ -140,8 +140,8 @@ export function RegisterOperatorModal({ open, onClose }: RegisterOperatorModalPr
     try {
       await addOperator({
         fullName: fullName.trim(),
-        primaryPhone: primaryPhone.trim(),
-        secondaryPhone: secondaryPhone.trim() || undefined,
+        phone_e164: primaryPhone.trim(),
+        secondary_phone_e164: secondaryPhone.trim() || undefined,
         vehiclePlate: vehiclePlate.trim().toUpperCase(),
         vehicleType,
         tankCapacityLitres: Number(tankCapacityLitres),
