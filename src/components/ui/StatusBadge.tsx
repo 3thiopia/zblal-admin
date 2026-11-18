@@ -5,9 +5,28 @@ import {
   RequestStatus,
 } from '../../types';
 
-type BadgeVariant = OperatorStatus | RequestStatus | RequestPriority | PaymentStatus | 'Active' | 'Inactive';
+type BadgeVariant =
+  | OperatorStatus
+  | RequestStatus
+  | RequestPriority
+  | PaymentStatus
+  | 'Active'
+  | 'Inactive'
+  | 'Paused'
+  | 'Upcoming'
+  | 'Draft'
+  | 'Approved'
+  | 'Rejected'
+  | 'Awarded'
+  | 'Forfeited'
+  | 'Valid'
+  | 'Flagged'
+  | 'Invalid'
+  | 'Coming Soon'
+  | 'Disabled'
+  | string;
 
-const BADGE_STYLES: Record<BadgeVariant, string> = {
+const BADGE_STYLES: Record<string, string> = {
   // Operator statuses
   Available: 'bg-[#DCE8DF] text-[#123C2A] border-[#C3D9C9]',
   Assigned: 'bg-[#E3ECF7] text-[#1D4ED8] border-[#C7DAFA]',
@@ -28,11 +47,23 @@ const BADGE_STYLES: Record<BadgeVariant, string> = {
   Urgent: 'bg-[#FFEDD5] text-[#9A3412] border-[#FED7AA]',
   Emergency: 'bg-[#FEE2E2] text-[#991B1B] border-[#FECACA]',
 
-  // Payments / Active
+  // Payments / Active / Arcade
   Paid: 'bg-[#DCE8DF] text-[#123C2A] border-[#C3D9C9]',
   Overdue: 'bg-[#FEE2E2] text-[#991B1B] border-[#FECACA]',
   Active: 'bg-[#DCE8DF] text-[#123C2A] border-[#C3D9C9]',
   Inactive: 'bg-[#F1F3F1] text-[#5C665F] border-[#DDE2DD]',
+  Disabled: 'bg-[#F1F3F1] text-[#5C665F] border-[#DDE2DD]',
+  Paused: 'bg-[#FEF3C7] text-[#92400E] border-[#FDE68A]',
+  Upcoming: 'bg-[#E0F2FE] text-[#075985] border-[#BAE6FD]',
+  Draft: 'bg-[#F7F6F0] text-[#5C665F] border-[#E6EAE5]',
+  Approved: 'bg-[#DCE8DF] text-[#123C2A] border-[#C3D9C9]',
+  Rejected: 'bg-[#FEE2E2] text-[#991B1B] border-[#FECACA]',
+  Awarded: 'bg-[#DCE8DF] text-[#123C2A] border-[#C3D9C9]',
+  Forfeited: 'bg-[#F1F3F1] text-[#5C665F] border-[#DDE2DD]',
+  Valid: 'bg-[#DCE8DF] text-[#123C2A] border-[#C3D9C9]',
+  Flagged: 'bg-[#FFEDD5] text-[#9A3412] border-[#FED7AA]',
+  Invalid: 'bg-[#FEE2E2] text-[#991B1B] border-[#FECACA]',
+  'Coming Soon': 'bg-[#E0F2FE] text-[#075985] border-[#BAE6FD]',
 };
 
 interface StatusBadgeProps {

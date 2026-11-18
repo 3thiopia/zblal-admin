@@ -12,6 +12,11 @@ import {
   Settings,
   LogOut,
   X,
+  Gamepad2,
+  Trophy,
+  CalendarDays,
+  Award,
+  Sliders,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -27,6 +32,15 @@ const NAV_ITEMS = [
   { to: '/finance', label: 'Finance', icon: Wallet },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/settings', label: 'Settings', icon: Settings },
+];
+
+const ARCADE_NAV_ITEMS = [
+  { to: '/arcade', label: 'Arcade Overview', icon: Gamepad2, end: true },
+  { to: '/arcade/players', label: 'Arcade Players', icon: Users },
+  { to: '/arcade/leaderboards', label: 'Leaderboards', icon: Trophy },
+  { to: '/arcade/competitions', label: 'Competitions', icon: CalendarDays },
+  { to: '/arcade/winners', label: 'Winners & Rewards', icon: Award },
+  { to: '/arcade/games', label: 'Arcade Games', icon: Sliders },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -94,6 +108,11 @@ export function Sidebar() {
 
   const renderNav = (collapsed: boolean, onNavigate?: () => void) => (
     <nav className="flex-1 px-3 py-3 sm:py-4 space-y-1 overflow-y-auto overscroll-contain" aria-label="Primary Navigation">
+      {!collapsed && (
+        <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[#758078]">
+          Operations
+        </p>
+      )}
       {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
         return (
@@ -118,6 +137,38 @@ export function Sidebar() {
           </NavLink>
         );
       })}
+
+      <div className="pt-3 mt-3 border-t border-[#E6EAE5] space-y-1">
+        {!collapsed && (
+          <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[#758078]">
+            Arcade Management
+          </p>
+        )}
+        {ARCADE_NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              onClick={onNavigate}
+              title={collapsed ? item.label : undefined}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 min-h-[44px] lg:min-h-[40px] rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                  collapsed ? 'justify-center px-2' : ''
+                } ${
+                  isActive
+                    ? 'bg-[#123C2A] text-white'
+                    : 'text-[#202A24] hover:bg-[#F7F6F0] hover:text-[#123C2A]'
+                }`
+              }
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              {!collapsed && <span className="truncate">{item.label}</span>}
+            </NavLink>
+          );
+        })}
+      </div>
     </nav>
   );
 

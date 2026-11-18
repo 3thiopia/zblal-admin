@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { useArcade } from '../../context/ArcadeContext';
 import { formatTimeAgo } from '../../utils/formatters';
 
 interface BreadcrumbItem {
@@ -43,6 +44,7 @@ export function Header() {
     loadingData,
     refreshData,
   } = useApp();
+  const { players: arcadePlayers } = useArcade();
   const { staffProfile, signOut } = useAuth();
 
   const location = useLocation();
@@ -168,8 +170,59 @@ export function Header() {
         breadcrumbs: [{ label: 'Operations', to: '/' }, { label: 'Settings' }],
       };
     }
+    if (path === '/arcade') {
+      return {
+        title: 'Arcade Overview',
+        breadcrumbs: [{ label: 'Arcade Management' }, { label: 'Overview' }],
+      };
+    }
+    if (path === '/arcade/players') {
+      return {
+        title: 'Arcade Players',
+        breadcrumbs: [{ label: 'Arcade Management', to: '/arcade' }, { label: 'Players' }],
+      };
+    }
+    if (path.startsWith('/arcade/players/')) {
+      const id = path.replace('/arcade/players/', '');
+      const pl = arcadePlayers.find((p) => p.id === id);
+      return {
+        title: pl ? pl.nickname : 'Player Profile',
+        breadcrumbs: [
+          { label: 'Arcade Management', to: '/arcade' },
+          { label: 'Players', to: '/arcade/players' },
+          { label: pl ? pl.nickname : 'Profile' },
+        ],
+      };
+    }
+    if (path === '/arcade/leaderboards') {
+      return {
+        title: 'Arcade Leaderboards',
+        breadcrumbs: [{ label: 'Arcade Management', to: '/arcade' }, { label: 'Leaderboards' }],
+      };
+    }
+    if (path === '/arcade/competitions') {
+      return {
+        title: 'Competitions',
+        breadcrumbs: [{ label: 'Arcade Management', to: '/arcade' }, { label: 'Competitions' }],
+      };
+    }
+    if (path === '/arcade/winners') {
+      return {
+        title: 'Winners & Rewards',
+        breadcrumbs: [
+          { label: 'Arcade Management', to: '/arcade' },
+          { label: 'Winners & Rewards' },
+        ],
+      };
+    }
+    if (path === '/arcade/games') {
+      return {
+        title: 'Arcade Games',
+        breadcrumbs: [{ label: 'Arcade Management', to: '/arcade' }, { label: 'Games' }],
+      };
+    }
     return { title: 'Zblal Operations', breadcrumbs: [{ label: 'Operations' }] };
-  }, [location.pathname, requests, operators, customers]);
+  }, [location.pathname, requests, operators, customers, arcadePlayers]);
 
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -206,8 +259,23 @@ export function Header() {
         kind: 'Operator',
       }));
 
-    return [...matchedRequests, ...matchedOperators];
-  }, [searchQuery, requests, operators]);
+    const matchedPlayers = arcadePlayers
+      .filter(
+        (p) =>
+          p.nickname.toLowerCase().includes(q) ||
+          p.phone_e164.toLowerCase().includes(q)
+      )
+      .slice(0, 3)
+      .map((p) => ({
+        id: p.id,
+        label: p.nickname,
+        sublabel: `${p.phone_e164 || 'No phone'} · ${p.status}`,
+        to: `/arcade/players/${p.id}`,
+        kind: 'Player',
+      }));
+
+    return [...matchedRequests, ...matchedOperators, ...matchedPlayers];
+  }, [searchQuery, requests, operators, arcadePlayers]);
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-[#E6EAE5]">

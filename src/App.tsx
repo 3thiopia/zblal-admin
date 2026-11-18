@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
+import { ArcadeProvider } from './context/ArcadeContext';
 import { AppShell } from './components/layout/AppShell';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -17,6 +18,13 @@ import { MapPage } from './pages/MapPage';
 import { FinancePage } from './pages/FinancePage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ArcadeDashboardPage } from './pages/arcade/ArcadeDashboardPage';
+import { ArcadePlayersPage } from './pages/arcade/ArcadePlayersPage';
+import { ArcadePlayerDetailPage } from './pages/arcade/ArcadePlayerDetailPage';
+import { ArcadeLeaderboardsPage } from './pages/arcade/ArcadeLeaderboardsPage';
+import { ArcadeCompetitionsPage } from './pages/arcade/ArcadeCompetitionsPage';
+import { ArcadeWinnersPage } from './pages/arcade/ArcadeWinnersPage';
+import { ArcadeGamesPage } from './pages/arcade/ArcadeGamesPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -50,23 +58,32 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <AppProvider>
-                  <AppShell>
-                    <Routes>
-                      <Route path="/" element={<DashboardPage />} />
-                      <Route path="/requests" element={<ServiceRequestsPage />} />
-                      <Route path="/requests/:id" element={<ServiceRequestDetailPage />} />
-                      <Route path="/operators" element={<OperatorsPage />} />
-                      <Route path="/operators/:id" element={<OperatorProfilePage />} />
-                      <Route path="/customers" element={<CustomersPage />} />
-                      <Route path="/customers/:id" element={<CustomerProfilePage />} />
-                      <Route path="/locations" element={<LocationsPage />} />
-                      <Route path="/map" element={<MapPage />} />
-                      <Route path="/finance" element={<FinancePage />} />
-                      <Route path="/reports" element={<ReportsPage />} />
-                      <Route path="/settings" element={<SettingsPage />} />
-                      <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
-                  </AppShell>
+                  <ArcadeProvider>
+                    <AppShell>
+                      <Routes>
+                        <Route path="/" element={<DashboardPage />} />
+                        <Route path="/requests" element={<ServiceRequestsPage />} />
+                        <Route path="/requests/:id" element={<ServiceRequestDetailPage />} />
+                        <Route path="/operators" element={<OperatorsPage />} />
+                        <Route path="/operators/:id" element={<OperatorProfilePage />} />
+                        <Route path="/customers" element={<CustomersPage />} />
+                        <Route path="/customers/:id" element={<CustomerProfilePage />} />
+                        <Route path="/locations" element={<LocationsPage />} />
+                        <Route path="/map" element={<MapPage />} />
+                        <Route path="/finance" element={<FinancePage />} />
+                        <Route path="/reports" element={<ReportsPage />} />
+                        <Route path="/settings" element={<SettingsPage />} />
+                        <Route path="/arcade" element={<ArcadeDashboardPage />} />
+                        <Route path="/arcade/players" element={<ArcadePlayersPage />} />
+                        <Route path="/arcade/players/:id" element={<ArcadePlayerDetailPage />} />
+                        <Route path="/arcade/leaderboards" element={<ArcadeLeaderboardsPage />} />
+                        <Route path="/arcade/competitions" element={<ArcadeCompetitionsPage />} />
+                        <Route path="/arcade/winners" element={<ArcadeWinnersPage />} />
+                        <Route path="/arcade/games" element={<ArcadeGamesPage />} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                      </Routes>
+                    </AppShell>
+                  </ArcadeProvider>
                 </AppProvider>
               </ProtectedRoute>
             }
